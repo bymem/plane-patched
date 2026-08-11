@@ -43,7 +43,7 @@ from plane.app.serializers import (
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.bgtasks.issue_description_version_task import issue_description_version_task
 from plane.bgtasks.recent_visited_task import recent_visited_task
-from plane.bgtasks.webhook_task import model_activity
+from plane.bgtasks.webhook_task import model_activity, webhook_activity
 from plane.db.models import (
     CycleIssue,
     FileAsset,
@@ -718,6 +718,21 @@ class IssueViewSet(BaseViewSet):
         issue = Issue.objects.get(workspace__slug=slug, project_id=project_id, pk=pk)
 
         issue.delete()
+        # Fire the issue deleted webhook. Only the id is sent, since the issue no
+        # longer exists and cannot be serialized.
+        webhook_activity.delay(
+            event="issue",
+            verb="deleted",
+            field=None,
+            old_value=None,
+            new_value=None,
+            actor_id=str(request.user.id),
+            slug=slug,
+            current_site=base_host(request=request, is_app=True),
+            event_id=str(pk),
+            old_identifier=None,
+            new_identifier=None,
+        )
         # delete the issue from recent visits
         UserRecentVisit.objects.filter(
             project_id=project_id,
