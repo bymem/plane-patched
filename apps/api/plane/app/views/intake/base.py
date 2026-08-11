@@ -47,6 +47,7 @@ from plane.utils.issue_filters import issue_filters
 from plane.utils.order_queryset import INTAKE_ISSUE_ORDER_BY_ALLOWLIST, sanitize_order_by
 from plane.bgtasks.issue_activities_task import issue_activity
 from plane.bgtasks.issue_description_version_task import issue_description_version_task
+from plane.bgtasks.webhook_task import webhook_activity
 from plane.app.views.base import BaseAPIView
 from plane.utils.timezone_converter import user_timezone_converter
 from plane.utils.global_paginator import paginate
@@ -564,6 +565,21 @@ class IntakeIssueViewSet(BaseViewSet):
             # Delete the issue also
             issue = Issue.objects.filter(workspace__slug=slug, project_id=project_id, pk=pk).first()
             issue.delete()
+            # Fire the issue deleted webhook. Only fired inside this branch, since an
+            # accepted intake item keeps its work item and only loses the intake link.
+            webhook_activity.delay(
+                event="issue",
+                verb="deleted",
+                field=None,
+                old_value=None,
+                new_value=None,
+                actor_id=str(request.user.id),
+                slug=slug,
+                current_site=base_host(request=request, is_app=True),
+                event_id=str(pk),
+                old_identifier=None,
+                new_identifier=None,
+            )
 
         intake_issue.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

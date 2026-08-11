@@ -27,6 +27,7 @@ from plane.api.serializers import (
 )
 from plane.app.permissions import ProjectLitePermission
 from plane.bgtasks.issue_activities_task import issue_activity
+from plane.bgtasks.webhook_task import webhook_activity
 from plane.db.models import Intake, IntakeIssue, Issue, Project, ProjectMember, State, StateGroup
 from plane.utils.host import base_host
 from plane.utils.content_validator import validate_html_content
@@ -494,6 +495,21 @@ class IntakeIssueDetailAPIEndpoint(BaseAPIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
             issue.delete()
+            # Fire the issue deleted webhook. Only fired inside this branch, since an
+            # accepted intake item keeps its work item and only loses the intake link.
+            webhook_activity.delay(
+                event="issue",
+                verb="deleted",
+                field=None,
+                old_value=None,
+                new_value=None,
+                actor_id=str(request.user.id),
+                slug=slug,
+                current_site=base_host(request=request, is_app=True),
+                event_id=str(issue_id),
+                old_identifier=None,
+                new_identifier=None,
+            )
 
         intake_issue.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
